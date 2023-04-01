@@ -2,14 +2,42 @@ import { FastifyInstance } from 'fastify'
 import { randomUUID } from 'crypto'
 import { knex } from '../database'
 import { z } from 'zod'
-import { hash } from 'bcryptjs'
+import { compare, hash } from 'bcryptjs'
 
 export async function userRoutes(app: FastifyInstance) {
-  // List all users - temporarily
-  app.get('/', async (request, reply) => {
-    const users = await knex('users').select()
+  // Login
+  app.post('/login', async (request, reply) => {
+    const requestUserBodySchema = z.object({
+      username: z.string(),
+      password: z.string(),
+    })
 
-    return reply.status(200).send({ users })
+    const { username, password } = requestUserBodySchema.parse(request.body)
+
+    const user = await knex('users')
+      .where('username', username)
+      .first()
+      .select('id', 'username', 'password')
+
+    if (!user?.username) {
+      throw new Error(`Username or password wrong`)
+    }
+
+    const passwordMatch = await compare(password, user.password)
+
+    if (passwordMatch) {
+      throw new Error(`Username or password wrong`)
+    }
+
+    const sessionId = user.id
+
+    return reply
+      .status(200)
+      .cookie('sessionId', sessionId, {
+        path: '/',
+        maxAge: 1000 * 60 * 60 * 12, // 12 hours
+      })
+      .send()
   })
 
   // Create a new user
@@ -27,12 +55,22 @@ export async function userRoutes(app: FastifyInstance) {
 
     const hashPassword = await hash(password, 8)
 
-    await knex('users').insert({
-      id: randomUUID(),
-      username,
-      password: hashPassword,
-    })
+    const user = await knex('users')
+      .insert({
+        id: randomUUID(),
+        username,
+        password: hashPassword,
+      })
+      .returning('*')
 
-    return reply.status(201).send()
+    const sessionId = user[0].id
+
+    return reply
+      .status(201)
+      .cookie('sessionId', sessionId, {
+        path: '/',
+        maxAge: 1000 * 60 * 60 * 12, // 12 hours
+      })
+      .send()
   })
 }
