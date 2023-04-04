@@ -18,6 +18,52 @@ export async function mealRoutes(app: FastifyInstance) {
     },
   )
 
+  app.get(
+    '/:id',
+    { preHandler: [checkSessionIdExists] },
+    async (request, reply) => {
+      const getMealParamsSchema = z.object({
+        id: z.string().uuid(),
+      })
+
+      const { id } = getMealParamsSchema.parse(request.params)
+      const { sessionId } = request.cookies
+
+      const meal = await knex('meals').where({ id, user_id: sessionId }).first()
+
+      console.log(meal)
+      console.log(sessionId)
+      if (!meal) {
+        return reply.status(400).send({
+          message: 'Refeição não encontrada',
+        })
+      }
+
+      return { meal }
+    },
+  )
+
+  app.delete(
+    '/:id',
+    { preHandler: [checkSessionIdExists] },
+    async (request, reply) => {
+      const getMealParamsSchema = z.object({
+        id: z.string().uuid(),
+      })
+
+      const { id } = getMealParamsSchema.parse(request.params)
+      const { sessionId } = request.cookies
+
+      await knex('meals').where({ id, user_id: sessionId }).delete()
+    },
+  )
+
+  app.patch(
+    '/',
+    { preHandler: [checkSessionIdExists] },
+    async (request, reply) => {},
+  )
+
   app.post(
     '/',
     {
@@ -32,7 +78,6 @@ export async function mealRoutes(app: FastifyInstance) {
       })
 
       const newMealRequest = createMealBodySchema.parse(request.body)
-
       const sessionId = request.cookies.sessionId
 
       await knex('meals').insert({
