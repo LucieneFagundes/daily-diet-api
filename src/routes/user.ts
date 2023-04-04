@@ -23,7 +23,7 @@ export async function userRoutes(app: FastifyInstance) {
       throw new Error(`Username or password wrong`)
     }
 
-    const passwordMatch = await compare(password, user.password)
+    const passwordMatch = await compare(user.password, password)
 
     if (passwordMatch) {
       throw new Error(`Username or password wrong`)
