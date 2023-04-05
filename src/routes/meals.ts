@@ -31,8 +31,6 @@ export async function mealRoutes(app: FastifyInstance) {
 
       const meal = await knex('meals').where({ id, user_id: sessionId }).first()
 
-      console.log(meal)
-      console.log(sessionId)
       if (!meal) {
         return reply.status(400).send({
           message: 'Refeição não encontrada',
@@ -55,13 +53,41 @@ export async function mealRoutes(app: FastifyInstance) {
       const { sessionId } = request.cookies
 
       await knex('meals').where({ id, user_id: sessionId }).delete()
+
+      return reply
+        .status(200)
+        .send({ message: 'Meal was deleted successfully' })
     },
   )
 
   app.patch(
     '/',
     { preHandler: [checkSessionIdExists] },
-    async (request, reply) => {},
+    async (request, reply) => {
+      const updateMealBodySchema = z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        description: z.string(),
+        diet: z.enum(['y', 'n']),
+        time: z.string(),
+      })
+
+      const { id, name, description, diet, time } = updateMealBodySchema.parse(
+        request.body,
+      )
+      const { sessionId } = request.cookies
+
+      await knex('meals').where({ id, user_id: sessionId }).update({
+        name,
+        description,
+        diet,
+        time,
+      })
+
+      return reply
+        .status(200)
+        .send({ message: 'Meal was updated successfully' })
+    },
   )
 
   app.post(
@@ -88,7 +114,9 @@ export async function mealRoutes(app: FastifyInstance) {
         user_id: sessionId,
       })
 
-      return reply.status(201).send()
+      return reply
+        .status(201)
+        .send({ message: 'Meal was created successfully' })
     },
   )
 }
