@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 import { knex } from '../database'
 import { z } from 'zod'
 import { compare, hash } from 'bcryptjs'
+import { checkSessionIdExists } from '../middlewares/check-session-id-exists'
 
 export async function userRoutes(app: FastifyInstance) {
   // Login
@@ -73,4 +74,71 @@ export async function userRoutes(app: FastifyInstance) {
       })
       .send()
   })
+
+  app.get(
+    '/summary',
+    { preHandler: [checkSessionIdExists] },
+    async (request, reply) => {
+      const { sessionId } = request.cookies
+
+      const totalMeals = await knex('meals')
+        .where({
+          user_id: sessionId,
+        })
+        .count('id', { as: 'totalMeals' })
+        .first()
+
+      const totalMealsOnDiet = await knex('meals')
+        .where({
+          user_id: sessionId,
+          diet: 'y',
+        })
+        .count('diet', { as: 'totalMealsOnDiet' })
+        .first()
+
+      const totalMealsNotOnDiet = await knex('meals')
+        .where({
+          user_id: sessionId,
+          diet: 'n',
+        })
+        .count('diet', { as: 'totalMealsNotOnDiet' })
+        .first()
+
+      const meals = await knex('meals')
+        .where({ user_id: sessionId })
+        .orderBy('time')
+        .select('diet')
+
+      const bestSequenceMeal = meals.map((item) => item.diet)
+
+      const minRecovery = 1
+      let count = 0
+      let recovery = 0
+
+      for (let i = 0; i < bestSequenceMeal.length; i++) {
+        if (bestSequenceMeal[i] === 'y') {
+          count++
+        }
+
+        if (bestSequenceMeal[i] === 'n') {
+          if (count >= minRecovery && count > recovery) {
+            recovery = count
+          }
+          count = 0
+        }
+
+        if (count >= minRecovery && count > recovery) {
+          recovery = count
+        }
+      }
+
+      const summary = []
+      summary.push(totalMeals)
+      summary.push(totalMealsOnDiet)
+      summary.push(totalMealsNotOnDiet)
+      summary.push({ bestSequence: recovery })
+
+      return summary
+    },
+  )
 }
